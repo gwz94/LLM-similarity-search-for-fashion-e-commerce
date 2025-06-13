@@ -15,16 +15,16 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # ── Stage 2: Runtime ────────────────────────────────────────────
 FROM python:3.12-slim
 
-ENV PYTHONUNBUFFERED=1 \
-    WEB_CONCURRENCY=4
+
+ENV WEB_CONCURRENCY=4 
 
 WORKDIR /app
 
 COPY --from=builder /install /usr/local
-
 COPY . /app
 
 EXPOSE 8000
+
 
 CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", \
      "--bind", "0.0.0.0:8000", "--log-level", "info"]
