@@ -1,30 +1,35 @@
-# ── Stage 1: Build ─────────────────────────────────────────────
-FROM python:3.12-slim AS builder
+# Build stage
+FROM python:3.12-slim as builder
 
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+# Set working directory
 WORKDIR /app
 
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
+# Install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
-# ── Stage 2: Runtime ────────────────────────────────────────────
+# Final stage
 FROM python:3.12-slim
-
-
-ENV WEB_CONCURRENCY=4 
 
 WORKDIR /app
 
-COPY --from=builder /install /usr/local
-COPY . /app
+# Copy only the installed packages from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
+# Copy application code
+COPY ./app /app/app
+
+# Expose port
 EXPOSE 8000
 
-
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", \
-     "--bind", "0.0.0.0:8000", "--log-level", "info"]
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
