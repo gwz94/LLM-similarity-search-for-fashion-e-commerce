@@ -1,13 +1,13 @@
 import os
 import logging
 import json
+import math
 
 import pandas as pd
-import psycopg2
-from psycopg2.extras import execute_values
+import psycopg
 
 from dotenv import load_dotenv
-from app.ai_utils import embedding
+from app.ai_utils import get_embedding
 from typing import List, Dict, Tuple, Any, Optional
 
 from app.config.settings import IN_STOCK_PRODUCTS_TABLE_NAME, OUT_OF_STOCK_PRODUCTS_TABLE_NAME, PRODUCT_DB_COLUMNS, PRODUCT_BATCH_SIZE
@@ -34,7 +34,6 @@ class VectorDatabase:
                 - port: Database port
                 - user: Database username
                 - password: Database password
-                - database: Database name
         """
 
         # Initialize logger
@@ -54,7 +53,8 @@ class VectorDatabase:
             Exception: If failed to connect to the database
         """
         try:
-            self.conn = psycopg2.connect(**self.connection_params)
+            self.conn = psycopg.connect(**self.connection_params)
+            self.conn.cursor()
             self.logger.info("Connected to the database")
         except Exception as e:
             self.logger.error(f"Failed to connect to the database: {e}")
@@ -83,7 +83,7 @@ class VectorDatabase:
 
         try:
             if not self.conn:
-                self.conn()
+                self.connect()
 
             cursor = self.conn.cursor()
 
@@ -92,49 +92,53 @@ class VectorDatabase:
             cursor.execute("DROP TABLE IF EXISTS in_stock_products")
             cursor.execute("DROP TABLE IF EXISTS out_of_stock_products")
 
-            cursor.execute("""
+            cursor.execute(f"""
                             CREATE TABLE IF NOT EXISTS in_stock_products (
-                                id SERIAL PRIMARY KEY,
-                                title TEXT,
-                                average_rating FLOAT,
-                                rating_number INT,
-                                features TEXT[]
-                                description TEXT,
-                                price BIGINT,
-                                images TEXT[],
-                                store TEXT,
-                                categories TEXT[],
-                                details JSONB,
-                                embedding VECTOR({self.embedding_dimension}) -- embedding vector dimension
-                                UNIQUE(title, description, store) -- prevent duplicate items based on title, description, and store                           )
+                                id              BIGSERIAL PRIMARY KEY,          
+                                title           TEXT        NOT NULL,
+                                average_rating  REAL,
+                                rating_number   INTEGER,
+                                features        JSONB,                          
+                                description     TEXT,
+                                price           NUMERIC,                        
+                                images          JSONB,                          
+                                store           TEXT,
+                                categories      TEXT,                          
+                                details         JSONB,                          
+                                embedding       VECTOR({self.embedding_dimension}),  -- pgvector column
+                                UNIQUE (title, description, store)
+                            );
                            """
                          )
 
-            cursor.execute("""
+            cursor.execute(f"""
                             CREATE TABLE IF NOT EXISTS out_of_stock_products (
-                                id SERIAL PRIMARY KEY,
-                                title TEXT,
-                                average_rating FLOAT,
-                                rating_number INT,
-                                features TEXT[]
-                                description TEXT,
-                                price BIGINT,
-                                images TEXT[],
-                                store TEXT,
-                                categories TEXT[],
-                                details JSONB,
-                                embedding VECTOR({self.embedding_dimension}) -- embedding vector dimension
-                                UNIQUE(title, description, store) -- prevent duplicate items based on title, description, and store                           )
+                                id              BIGSERIAL PRIMARY KEY,          
+                                title           TEXT        NOT NULL,
+                                average_rating  REAL,
+                                rating_number   INTEGER,
+                                features        JSONB,                          
+                                description     TEXT,
+                                price           NUMERIC,                        
+                                images          JSONB,                          
+                                store           TEXT,
+                                categories      TEXT,                          
+                                details         JSONB,                          
+                                embedding       VECTOR({self.embedding_dimension}),  -- pgvector column
+                                UNIQUE (title, description, store)
+                            );
                            """
                          )
             
+            # Create indexes using ivfflat index to speed up cosine similarity search
             cursor.execute("""
-                           CREATE INDEX IF NOT EXISTS avail_emb_cos_idx
+                           CREATE INDEX IF NOT EXISTS in_stock_emb_cos_idx
                            ON in_stock_products USING ivfflat (embedding vector_cosine_ops)
                            """)
-            
+
+            # Create indexes using ivfflat index to speed up cosine similarity search
             cursor.execute("""
-                           CREATE INDEX IF NOT EXISTS out_emb_cos_idx
+                           CREATE INDEX IF NOT EXISTS out_of_stock_emb_cos_idx
                            ON out_of_stock_products USING ivfflat (embedding vector_cosine_ops)
                            """)
             
@@ -163,7 +167,6 @@ class VectorDatabase:
         Raises:
             Exception: If failed to insert product
         """
-
         if not products_tuple:
             self.logger.warning("No products to insert")
             return
@@ -175,20 +178,22 @@ class VectorDatabase:
             cursor = self.conn.cursor()
 
             # On assumption that no product will have the same title, description, and store
-            sql = f"""
-                INSERT INTO {table_name} 
-                    (title, average_rating, rating_number, features, 
-                description, price, images, store, categories, details, embedding)
+            sql = """
+                INSERT INTO {table}
+                    (title, average_rating, rating_number, features,
+                    description, price, images, store, categories,
+                    details, embedding)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (title, description, store) DO NOTHING
-            """
+            """.format(table=table_name)
 
             for i in range(0, len(products_tuple), batch_size):
                 chunk = products_tuple[i: i + batch_size]
-                execute_values(cursor, sql, chunk)
+                cursor.executemany(sql, chunk)
+                self.conn.commit()
+                self.logger.info(f"Inserted batch of {len(chunk)} products into {table_name}")
 
-            self.conn.commit()
-            self.logger.info(f"Inserted {len(products_tuple)} products into {table_name}")
+            self.logger.info(f"Successfully inserted {len(products_tuple)} products into {table_name}")
 
         except Exception as e:
             if self.conn:
@@ -231,7 +236,7 @@ class VectorDatabase:
                     rating_number,
                     features,
                     description,
-                    price,
+                    price::float,  -- Convert price to float
                     images,
                     store,
                     categories,
@@ -259,24 +264,39 @@ class VectorDatabase:
                 else:
                     details = {}
 
-                # Only append results that meet the similarity threshold
-                if similarity > SEARCH_SIMILARITY_THRESHOLD:
-                    results.append({
-                        "title": title,
-                        "average_rating": average_rating,
-                        "rating_number": rating_number,
-                        "features": features,
-                        "description": description,
-                        "price": price,
-                        "images": images,
-                        "store": store,
-                        "categories": categories,
-                        "details": details,
-                        "similarity": similarity
-                    })
+                # Handle NaN values by converting them to None
+                def safe_float(value):
+                    try:
+                        if value is None or (isinstance(value, float) and math.isnan(value)):
+                            return None
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None
 
-                self.logger.info(f"{len(results)} products found.")
-                return results
+                def safe_int(value):
+                    try:
+                        if value is None or (isinstance(value, float) and math.isnan(value)):
+                            return None
+                        return int(value)
+                    except (ValueError, TypeError):
+                        return None
+
+                results.append({
+                    "title": title,
+                    "average_rating": safe_float(average_rating),
+                    "rating_number": safe_int(rating_number),
+                    "features": features,
+                    "description": description,
+                    "price": safe_float(price),
+                    "images": images,
+                    "store": store,
+                    "categories": categories,
+                    "details": details,
+                    "similarity": safe_float(similarity)
+                })
+
+            self.logger.info(f"{len(results)} products found from {table_name}.")
+            return results
     
 
         except Exception as e:
@@ -288,9 +308,9 @@ class VectorDatabase:
                 cursor.close()
     
 
-    def load_products(self, df_product: pd.DataFrame, table_name: str) -> None:
+    def insert_products_information(self, df_product: pd.DataFrame, table_name: str) -> None:
         """
-        Load products into the database.
+        insert products information into the database.
 
         Args:
             df_product: DataFrame containing products
@@ -301,30 +321,34 @@ class VectorDatabase:
             Exception: If failed to load products
         """
         try:
-            if not df_product:
-                self.logger.warning("No products to insert")
+            if df_product.empty:
+                self.logger.warning("No products information to insert")
                 return
 
             insert_columns = PRODUCT_DB_COLUMNS
-            assert all(col in df_product.columns for col in insert_columns), "Missing required columns"
-
-            df_product["embedding"] = df_product.apply(lambda x: embedding(
-                f"Title: {x['title']}, Description: {x['description']}, Details: {x['details']}"), axis=1)
+            self.logger.info(f"Checking required columns: {insert_columns}")
+            self.logger.info(f"Available columns: {df_product.columns.tolist()}")
             
-            df_product_available = df_product[df_product["status"] == "in_stock"]
-            df_product_unavailable = df_product[df_product["status"] == "out_of_stock"]
+            missing_columns = [col for col in insert_columns if col not in df_product.columns]
+            if missing_columns:
+                raise ValueError(f"Missing required columns: {missing_columns}")
+            
+            df_product_available = df_product[df_product["inventory_status"] == "in_stock"]
+            df_product_unavailable = df_product[df_product["inventory_status"] == "out_of_stock"]
 
-            # Convert the available products dataframe to a list of tuples for insertion
-            insertion_rows_available = [
-                tuple(row[col] for col in insert_columns)
-                for _, row in df_product_available.iterrows()
-            ]
-
-            # Convert the unavailable products dataframe to a list of tuples for insertion
-            insertion_rows_unavailable = [
-                tuple(row[col] for col in insert_columns)
-                for _, row in df_product_unavailable.iterrows()
-            ]
+            insertion_rows_available = []
+            for _, row in df_product_available.iterrows():
+                insertion_rows_available.append(tuple(
+                    json.dumps(row[col]) if isinstance(row[col], (dict, list)) else row[col]
+                    for col in insert_columns
+                ))
+            
+            insertion_rows_unavailable = []
+            for _, row in df_product_unavailable.iterrows():
+                insertion_rows_unavailable.append(tuple(
+                    json.dumps(row[col]) if isinstance(row[col], (dict, list)) else row[col]
+                    for col in insert_columns
+                ))
 
             if not df_product_available.empty:
                 self.logger.info(f"Inserting {len(insertion_rows_available)} in stock products into {IN_STOCK_PRODUCTS_TABLE_NAME}")
@@ -334,10 +358,10 @@ class VectorDatabase:
                 self.logger.info(f"Inserting {len(insertion_rows_unavailable)} out of stock products into {OUT_OF_STOCK_PRODUCTS_TABLE_NAME}")
                 self.batch_insert_product(insertion_rows_unavailable, OUT_OF_STOCK_PRODUCTS_TABLE_NAME, PRODUCT_BATCH_SIZE)
             
-            self.logger.info(f"Inserted {len(df_product)} products into {table_name}")
+            self.logger.info(f"Successfully inserted {len(df_product)} products into {table_name}")
 
         except Exception as e:
-            self.logger.error(f"Failed to load products: {e}")
+            self.logger.error(f"Failed to insert products information into the database: {e}")
             raise    
 
             
