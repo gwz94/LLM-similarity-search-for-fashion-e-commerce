@@ -19,48 +19,43 @@ from app.config.settings import IN_STOCK_PRODUCTS_TABLE_NAME, OUT_OF_STOCK_PRODU
 
 load_dotenv()
 
-class Message(BaseModel):
-    role: str
+class QueryValidationBase(BaseModel):
     query: str
-
-    @field_validator("query")
-    @classmethod
-    def validate_content(cls, v):
-        if not v.strip():
-            raise ValueError("Message cannot be empty or only spaces.")
-        if len(v) > 500:
-            raise ValueError("Message cannot be longer than 500 characters.")
-        if re.search(r"(bomb|kill|attack|gun)", v, re.IGNORECASE):
-            raise ValueError("Message contain inappropriate words.")
-        if re.search(r"[<>{}[\]\\]", v):  # Prevent HTML/script injection
-            raise ValueError("Query contains invalid characters.")
-        return v
-
-class ChatMessage(BaseModel):
-    messages: list[Message]
-
-class SearchQuery(BaseModel):
-    query: str
-    limit: Optional[int] = 5
-    out_of_stock_products_recommendation: Optional[bool] = True
 
     @field_validator("query")
     @classmethod
     def validate_query(cls, v):
         if not v.strip():
             raise ValueError("Query cannot be empty or only spaces.")
+        if len(v) < 5:
+            raise ValueError("Query cannot be shorter than 5 characters.")
         if len(v) > 500:
             raise ValueError("Query cannot be longer than 500 characters.")
-        if re.search(r"[<>{}[\]\\]", v):  # Prevent HTML/script injection
+        if re.search(r"""\b(gun|bomb|kill|murder|shoot|attack|weapon|explosive|bullet|acid|sniper|grenade|terror|
+                            assault|execute|behead|poison|cyanide|sarin|anthrax|suicide\s*bomber|arson|sabotage|
+                            molotov|lynch|genocide|riot|vandalism|rape|slaughter|firearm|extremist|burn\s*down|
+                            hate\s*crime|abuse|threaten)\b""", v, re.IGNORECASE):
+            raise ValueError("Query contains inappropriate words.")
+        if re.search(r"[<>{}[\]\\]", v):
             raise ValueError("Query contains invalid characters.")
         return v
 
-    @field_validator("limit")
+class Message(QueryValidationBase):
+    role: str
+
+class ChatMessage(BaseModel):
+    messages: list[Message]
+
+class SearchQuery(QueryValidationBase):
+    top_k: Optional[int] = 5
+
+    @field_validator("top_k")
     @classmethod
-    def validate_limit(cls, v):
-        if v is not None and (v < 1 or v > 100):
-            raise ValueError("Limit must be between 1 and 100.")
+    def validate_top_k(cls, v):
+        if v is not None and (v < 1 or v > 10):
+            raise ValueError("top_k must be between 1 and 10.")
         return v
+
 
 app = FastAPI(title="Fashion E-commerce Search")
 
@@ -76,10 +71,10 @@ app.add_middleware(
 def get_db():
     """Dependency to get database connection"""
     connection_params = {
-        "host": "localhost",
-        "port": 5432,
-        "user": "postgres",
-        "password": "postgres",
+        "host": os.getenv("POSTGRES_HOST", "127.0.0.1"),
+        "port": int(os.getenv("POSTGRES_PORT", "5432")),
+        "user": os.getenv("POSTGRES_USER", "postgres"),
+        "password": os.getenv("POSTGRES_PASSWORD", "postgres"),
     }
     db = VectorDatabase(connection_params)
     try:
@@ -108,18 +103,20 @@ async def search_products(query: SearchQuery, db: DB):
         
         # Get embedding for the query
         query_embedding = get_embedding(query.query)
+
+        print(f"query: {query}")
         
         # Search in both tables
         in_stock_results = db.search_products(
             query_embedding=query_embedding,
             table_name="in_stock_products",
-            top_k=query.limit
+            top_k=query.top_k
         )
         
         out_of_stock_results = db.search_products(
             query_embedding=query_embedding,
             table_name="out_of_stock_products",
-            top_k=query.limit
+            top_k=query.top_k
         )
         
         # Add stock status to results
@@ -128,16 +125,25 @@ async def search_products(query: SearchQuery, db: DB):
         for result in out_of_stock_results:
             result["stock_status"] = "out_of_stock"
         
-        reranked_results = rerank_search_results(
-            in_stock_search_results=in_stock_results,
-            out_of_stock_search_results=out_of_stock_results,
+        reranked_in_stock_results = rerank_search_results(
+            products_search_results=in_stock_results,
+            stock_status="in_stock",
             query=query.query,
-            out_of_stock_products_recommendation=query.out_of_stock_products_recommendation
         )
+
+        reranked_out_of_stock_results = rerank_search_results(
+            products_search_results=out_of_stock_results,
+            stock_status="out_of_stock",
+            query=query.query,
+        )
+        
+        print(f"reranked_in_stock_results: {reranked_in_stock_results}")
+        print(f"reranked_out_of_stock_results: {reranked_out_of_stock_results}")
 
         return {
             "status": "success",
-            "recommended_products": reranked_results
+            "recommended_in_stock_products": reranked_in_stock_results,
+            "recommended_out_of_stock_products": reranked_out_of_stock_results
         }
     except ValueError as e:
         # Handle validation errors

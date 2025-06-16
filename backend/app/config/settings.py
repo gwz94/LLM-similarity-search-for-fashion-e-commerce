@@ -29,4 +29,10 @@ IMAGE_FEATURE_EXTRACTION_MODEL = "gpt-4.1-mini"
 RERANKER_MODEL_NAME = "gpt-4"  # or any other model you prefer for reranking
 
 # Batch size for embedding products description
-PRODUCT_EMBEDDING_BATCH_SIZE = 1000
+PRODUCT_EMBEDDING_BATCH_SIZE = 2000
+
+# Temperature set for consistency
+LLM_RERANKER_TEMPERATURE = 0.1
+
+# Top P set for consistency
+LLM_RERANKER_TOP_P = 1

@@ -1,6 +1,8 @@
 import os
 import logging
 import time
+import json
+import psutil
 
 import pandas as pd
 import numpy as np
@@ -118,6 +120,8 @@ def image_feature_extraction(img_url: str) -> str:
 
         logger.info(f"Extracting feature from image: {img_url}")
 
+        # NOTE: This could be used to extract categories(color, occasion, etc.) to increase the context of the product.
+        # Which will increase the accuracy of the product search. Will consider if there is credit left.
         response = client.responses.create(
             model=IMAGE_FEATURE_EXTRACTION_MODEL,
             input = [
@@ -151,16 +155,16 @@ def image_feature_extraction(img_url: str) -> str:
         return None
 
 
-def products_description_embedding(df: pd.DataFrame, batch_size: int = PRODUCT_EMBEDDING_BATCH_SIZE,) -> pd.DataFrame:
+def products_description_embedding(df: pd.DataFrame, batch_size: int = PRODUCT_EMBEDDING_BATCH_SIZE) -> pd.DataFrame:
     """
-    Embedding the title, description, features, details of the product.
+    Embeds product descriptions and loads embeddings back into DataFrame.
 
     Args:
         df: DataFrame containing products
         batch_size: Batch size for embedding products description
 
     Returns:
-        df: DataFrame with embedding column
+        df: DataFrame with added 'embedding' column
     """
     logger.info(f"Starting embedding process for {len(df)} products")
     
@@ -170,14 +174,14 @@ def products_description_embedding(df: pd.DataFrame, batch_size: int = PRODUCT_E
     ).to_list()
 
     all_embeddings = []
-    for i in tqdm(range(0, len(embeddings_texts), PRODUCT_EMBEDDING_BATCH_SIZE), total=len(embeddings_texts) // PRODUCT_EMBEDDING_BATCH_SIZE, desc="Generating embeddings"):
-        batch = embeddings_texts[i : i + PRODUCT_EMBEDDING_BATCH_SIZE]
+    for i in tqdm(range(0, len(embeddings_texts), batch_size),
+                total=(len(embeddings_texts) + batch_size - 1) // batch_size,
+                desc="Generating embeddings"):
+        batch = embeddings_texts[i : i + batch_size]
         batch_embeddings = batch_embedding(batch)
         all_embeddings.extend(batch_embeddings)
-        if i % 100 == 0:
-            time.sleep(300) # to prevent memory leak error
 
     df["embedding"] = all_embeddings
-    
+
     logger.info("Embedding process completed")
     return df

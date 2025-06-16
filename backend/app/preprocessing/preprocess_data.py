@@ -44,4 +44,7 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     )
     logger.info(f"Image feature extraction completed with {len(df)} products")
 
+    # Drop products with missing title
+    df = df[~df["title"].isna()]
+
     return df

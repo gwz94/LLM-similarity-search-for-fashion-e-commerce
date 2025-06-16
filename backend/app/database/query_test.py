@@ -1,14 +1,19 @@
 from app.database.vector_db import VectorDatabase
 from app.ai_utils.embeddings import get_embedding
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 if __name__ == "__main__":
-    embedded_query = get_embedding("I need an outfit to go to the beach this summer”")
+    embedded_query = get_embedding("I need an outfit to go to the beach this summer")
     # Create VectorDatabase instance
     db = VectorDatabase(connection_params={
-        "host": "localhost",
+        "host": "127.0.0.1",
         "port": 5432,
         "user": "postgres",
         "password": "postgres",
+        "dbname": "fashion_db"
     })
     # Connect to database
     db.connect()

@@ -106,7 +106,8 @@ class VectorDatabase:
                                 categories      TEXT,                          
                                 details         JSONB,                          
                                 embedding       VECTOR({self.embedding_dimension}),  -- pgvector column
-                                UNIQUE (title, description, store)
+                                unique_hash     TEXT GENERATED ALWAYS AS (MD5(title || description || store)) STORED,
+                                UNIQUE (unique_hash) -- Use unique_hash to prevent duplicate products
                             );
                            """
                          )
@@ -125,7 +126,8 @@ class VectorDatabase:
                                 categories      TEXT,                          
                                 details         JSONB,                          
                                 embedding       VECTOR({self.embedding_dimension}),  -- pgvector column
-                                UNIQUE (title, description, store)
+                                unique_hash     TEXT GENERATED ALWAYS AS (MD5(title || description || store)) STORED,
+                                UNIQUE (unique_hash) -- Use unique_hash to prevent duplicate products
                             );
                            """
                          )
@@ -184,7 +186,7 @@ class VectorDatabase:
                     description, price, images, store, categories,
                     details, embedding)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (title, description, store) DO NOTHING
+                ON CONFLICT (unique_hash) DO NOTHING
             """.format(table=table_name)
 
             for i in range(0, len(products_tuple), batch_size):
@@ -231,6 +233,7 @@ class VectorDatabase:
 
             sql = f"""
                 SELECT
+                    id,
                     title,
                     average_rating,
                     rating_number,
@@ -254,7 +257,7 @@ class VectorDatabase:
 
             results = []
             for row in cursor.fetchall():
-                title, average_rating, rating_number, features, description, price, images, store, categories, details_json, similarity = row
+                id, title, average_rating, rating_number, features, description, price, images, store, categories, details_json, similarity = row
 
                 if details_json:
                     if isinstance(details_json, str):
@@ -282,6 +285,7 @@ class VectorDatabase:
                         return None
 
                 results.append({
+                    "id": id,
                     "title": title,
                     "average_rating": safe_float(average_rating),
                     "rating_number": safe_int(rating_number),
@@ -308,14 +312,12 @@ class VectorDatabase:
                 cursor.close()
     
 
-    def insert_products_information(self, df_product: pd.DataFrame, table_name: str) -> None:
+    def insert_products_information(self, df_product: pd.DataFrame) -> None:
         """
         insert products information into the database.
 
         Args:
             df_product: DataFrame containing products
-            table_name: Name of the table to insert products into
-            vector_db: VectorDatabase instance for database operations
 
         Raises:
             Exception: If failed to load products
@@ -349,7 +351,7 @@ class VectorDatabase:
                     json.dumps(row[col]) if isinstance(row[col], (dict, list)) else row[col]
                     for col in insert_columns
                 ))
-
+                
             if not df_product_available.empty:
                 self.logger.info(f"Inserting {len(insertion_rows_available)} in stock products into {IN_STOCK_PRODUCTS_TABLE_NAME}")
                 self.batch_insert_product(insertion_rows_available, IN_STOCK_PRODUCTS_TABLE_NAME, PRODUCT_BATCH_SIZE)
@@ -358,7 +360,7 @@ class VectorDatabase:
                 self.logger.info(f"Inserting {len(insertion_rows_unavailable)} out of stock products into {OUT_OF_STOCK_PRODUCTS_TABLE_NAME}")
                 self.batch_insert_product(insertion_rows_unavailable, OUT_OF_STOCK_PRODUCTS_TABLE_NAME, PRODUCT_BATCH_SIZE)
             
-            self.logger.info(f"Successfully inserted {len(df_product)} products into {table_name}")
+            self.logger.info(f"Successfully inserted {len(df_product)} products into database")
 
         except Exception as e:
             self.logger.error(f"Failed to insert products information into the database: {e}")

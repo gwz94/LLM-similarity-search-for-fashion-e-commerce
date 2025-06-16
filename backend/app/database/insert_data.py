@@ -8,11 +8,8 @@ from typing import Dict, Any
 
 from app.database.vector_db import VectorDatabase
 from app.preprocessing.preprocess_data import preprocess_data
-from app.config.settings import (
-    IN_STOCK_PRODUCTS_TABLE_NAME,
-    OUT_OF_STOCK_PRODUCTS_TABLE_NAME,
-    PRODUCT_DATA_PATH
-)
+from app.config.settings import PRODUCT_DATA_PATH
+
 
 load_dotenv()
 
@@ -44,7 +41,7 @@ def init_database() -> VectorDatabase:
     # Parse connection parameters
     connection_params = {
         "host": os.getenv("DB_HOST"),  
-        "port": os.getenv("DB_PORT"),        
+        "port": int(os.getenv("DB_PORT")),        
         "user": os.getenv("DB_USER"), 
         "password": os.getenv("DB_PASSWORD"),  
     }
@@ -71,16 +68,32 @@ def main():
                 item = json.loads(line)
                 data.append(item)
 
-        df = pd.DataFrame(data)[:1000]
-        loggers["data_loader"].info(f"Loaded {len(df)} products from file")
-
-        # Preprocess data
-        df = preprocess_data(df)
-        loggers["data_loader"].info(f"Preprocessing completed. {len(df)} products remaining")
-
-        # Insert products information into database
-        loggers["data_loader"].info("Loading products into database...")
-        vector_db.insert_products_information(df, IN_STOCK_PRODUCTS_TABLE_NAME)
+        # NOTE:Use only half of the data because of limited memory on my computer
+        data = data[ : len(data) // 2]
+        
+        # Process data in smaller batches
+        BATCH_SIZE = len(data) // 2
+        for i in range(0, len(data), BATCH_SIZE):
+            batch = data[i:i + BATCH_SIZE]
+            df = pd.DataFrame(batch)
+            loggers["data_loader"].info(f"Processing batch {i//BATCH_SIZE + 1}, {len(df)} products")
+            
+            # Preprocess the batch
+            df = preprocess_data(df)
+            
+            # Split into in-stock and out-of-stock products
+            in_stock_df = df[df['inventory_status'] == "in_stock"]
+            out_of_stock_df = df[df['inventory_status'] == "out_of_stock"]
+            
+            # Insert in-stock products
+            if not in_stock_df.empty:
+                vector_db.insert_products_information(in_stock_df)
+            
+            # Insert out-of-stock products
+            if not out_of_stock_df.empty:
+                vector_db.insert_products_information(out_of_stock_df)
+            
+            loggers["data_loader"].info(f"Successfully processed batch {i//BATCH_SIZE + 1}")
 
         loggers["data_loader"].info("Data loading completed successfully!")
         
