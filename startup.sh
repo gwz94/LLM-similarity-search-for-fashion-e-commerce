@@ -27,18 +27,18 @@ else
     CORS_ORIGINS="http://localhost:${FRONTEND_PORT},http://localhost:3000"
 fi
 
-# ✅ Export for local shell usage
+# Export for local shell usage
 export NEXT_PUBLIC_API_URL=${API_URL}
 export FRONTEND_PORT=${FRONTEND_PORT}
 export BACKEND_PORT=${BACKEND_PORT}
 export DB_PORT=${DB_PORT}
 
-# ✅ Write to frontend/.env.production for Next.js
+# Write to frontend/.env.production for Next.js
 cat > frontend/.env.production << EOL
 NEXT_PUBLIC_API_URL=${API_URL}
 EOL
 
-# ✅ Write to .env for Docker Compose
+# Write to .env for Docker Compose
 cat > .env << EOL
 NEXT_PUBLIC_API_URL=${API_URL}
 FRONTEND_PORT=${FRONTEND_PORT}
@@ -46,6 +46,9 @@ BACKEND_PORT=${BACKEND_PORT}
 DB_PORT=${DB_PORT}
 CORS_ORIGINS=${CORS_ORIGINS}
 EOL
+
+# Write to backend/.env.production for FastAPI
+echo "CORS_ORIGINS=${CORS_ORIGINS}" >> backend/.env.production
 
 echo "Starting database..."
 docker compose --profile prod up -d db-prod
