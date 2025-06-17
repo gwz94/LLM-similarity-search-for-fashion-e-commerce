@@ -1,38 +1,88 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Get the root directory of the project
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Path to the raw data
-PRODUCT_DATA_PATH = os.path.join(ROOT_DIR, "raw_data", "meta_amazon_fashion.jsonl")
+from pydantic_settings import BaseSettings
+from functools import lru_cache
 
-# Product columns to be inserted into the database
-PRODUCT_DB_COLUMNS = ["title", "average_rating", "rating_number", "features", "description", 
-                      "price", "images", "store", "categories", "details", "embedding"]
+# # Get the root directory of the project
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
-# Batch size for inserting products into the database
-PRODUCT_BATCH_SIZE = 1_000
 
-# Similarity threshold for search
-SEARCH_SIMILARITY_THRESHOLD = 0.0
+class Settings(BaseSettings):
+    # Common settings
+    APP_NAME: str = "Fashion E-commerce Search API"
+    APP_VERSION: str = "v1"
 
-# Table names for in stock and out of stock products
-IN_STOCK_PRODUCTS_TABLE_NAME = "in_stock_products"
-OUT_OF_STOCK_PRODUCTS_TABLE_NAME = "out_of_stock_products"
+    # Controls how much data to load (1 = 25% of data, 2 = 50%, 4 = 100%)
+    DATA_LOAD_FRACTION: int = 2
 
-# Model for image feature extraction
-IMAGE_FEATURE_EXTRACTION_MODEL = "gpt-4.1-mini"
+    # Database settings
+    DB_HOST: str
+    DB_PORT: int
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_NAME: str
 
-# Model for reranking search results
-RERANKER_MODEL_NAME = "gpt-4"  # or any other model you prefer for reranking
+    # OpenAI settings
+    OPENAI_API_KEY: str
+    EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
+    IMAGE_FEATURE_EXTRACTION_MODEL: str = "gpt-4.1-mini"
 
-# Batch size for embedding products description
-PRODUCT_EMBEDDING_BATCH_SIZE = 2000
+    RERANKER_MODEL_NAME: str = "gpt-4.1-nano"    
+    LLM_RERANKER_TEMPERATURE: float = 0.1
+    LLM_RERANKER_TOP_P: float = 1.0
 
-# Temperature set for consistency
-LLM_RERANKER_TEMPERATURE = 0.1
+    # Vector settings
+    EMBEDDING_DIMENSION: int = 1536
 
-# Top P set for consistency
-LLM_RERANKER_TOP_P = 1
+    # Product settings
+    PRODUCT_BATCH_SIZE: int = 1_000
+    PRODUCT_EMBEDDING_BATCH_SIZE: int = 2_000
+    PRODUCT_RECOMMENDATION_BATCH_SIZE: int = 100
+    PRODUCT_RECOMMENDATION_TOP_K: int = 5
+    PRODUCT_RECOMMENDATION_TEMPERATURE: float = 0.1
+    PRODUCT_RECOMMENDATION_TOP_P: float = 1.0
+  
+    # Product data path
+    PRODUCT_DATA_PATH: str = "/app/raw_data/meta_Amazon_Fashion.jsonl"
+
+    PRODUCT_DB_COLUMNS: list[str] = [
+        "title",
+        "average_rating",
+        "rating_number",
+        "features",
+        "description",
+        "price",
+        "images",
+        "store",
+        "categories",
+        "details",
+        "embedding",
+    ]
+
+    # Table names for in stock and out of stock products
+    IN_STOCK_PRODUCTS_TABLE_NAME: str = "in_stock_products"
+    OUT_OF_STOCK_PRODUCTS_TABLE_NAME: str = "out_of_stock_products"
+
+    # Environment specific settings
+    ENV: str = "development"
+    DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
+
+    class Config:
+        env_file = ".env.development"
+
+class DevSettings(Settings):
+    DEBUG: bool = True
+    LOG_LEVEL: str = "DEBUG"
+
+class ProdSettings(Settings):
+    DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
+
+@lru_cache
+def get_settings() -> Settings:
+    if os.getenv("ENV") == "production":
+        return ProdSettings()
+    return DevSettings()

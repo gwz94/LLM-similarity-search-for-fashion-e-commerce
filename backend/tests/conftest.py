@@ -16,6 +16,7 @@ os.environ["DB_PASSWORD"] = "postgres"
 os.environ["DB_NAME"] = "fashion_ecommerce_test"
 os.environ["EMBEDDING_DIMENSION"] = "1536"  # Set to match production dimension
 
+
 # Load environment variables for testing
 @pytest.fixture(autouse=True)
 def setup_test_env():
@@ -26,4 +27,4 @@ def setup_test_env():
     os.environ["DB_USER"] = "postgres"
     os.environ["DB_PASSWORD"] = "postgres"
     os.environ["DB_NAME"] = "fashion_ecommerce_test"
-    yield 
+    yield

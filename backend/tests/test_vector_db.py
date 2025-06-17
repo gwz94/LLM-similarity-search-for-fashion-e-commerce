@@ -7,7 +7,7 @@ from app.database.vector_db import VectorDatabase
 from app.config.settings import (
     IN_STOCK_PRODUCTS_TABLE_NAME,
     OUT_OF_STOCK_PRODUCTS_TABLE_NAME,
-    SEARCH_SIMILARITY_THRESHOLD
+    SEARCH_SIMILARITY_THRESHOLD,
 )
 
 # Test data
@@ -15,7 +15,7 @@ MOCK_CONNECTION_PARAMS = {
     "host": "127.0.0.1",
     "port": 5432,
     "user": "test_user",
-    "password": "test_password"
+    "password": "test_password",
 }
 
 MOCK_PRODUCT_DATA = {
@@ -29,13 +29,14 @@ MOCK_PRODUCT_DATA = {
     "store": "Test Store",
     "categories": "Test Category",
     "details": {"color": "red"},
-    "embedding": [0.1] * 1536  # Mock embedding vector with correct dimension
+    "embedding": [0.1] * 1536,  # Mock embedding vector with correct dimension
 }
+
 
 @pytest.fixture
 def vector_db():
     """Fixture to create a VectorDatabase instance for testing"""
-    with patch('psycopg.connect') as mock_connect:
+    with patch("psycopg.connect") as mock_connect:
         mock_conn = Mock()
         mock_cursor = Mock()
         mock_conn.cursor.return_value = mock_cursor
@@ -44,10 +45,12 @@ def vector_db():
         db.conn = mock_conn
         yield db
 
+
 def test_init(vector_db):
     """Test VectorDatabase initialization"""
     assert vector_db.connection_params == MOCK_CONNECTION_PARAMS
     assert vector_db.conn is not None
+
 
 def test_connect(vector_db):
     """Test database connection"""
@@ -55,6 +58,7 @@ def test_connect(vector_db):
     vector_db.conn.cursor.reset_mock()
     vector_db.connect()
     vector_db.conn.cursor.assert_called_once()
+
 
 def test_disconnect(vector_db):
     """Test database disconnection"""
@@ -67,25 +71,29 @@ def test_disconnect(vector_db):
     conn.close.assert_called_once()
     assert vector_db.conn is None
 
+
 def test_initialize_database(vector_db):
     """Test database initialization"""
     mock_cursor = Mock()
     vector_db.conn.cursor.return_value = mock_cursor
-    
+
     vector_db.initialize_database()
-    
+
     # Verify that the necessary SQL commands were executed
-    assert mock_cursor.execute.call_count >= 4  # At least 4 SQL commands should be executed
+    assert (
+        mock_cursor.execute.call_count >= 4
+    )  # At least 4 SQL commands should be executed
     mock_cursor.execute.assert_any_call("CREATE EXTENSION IF NOT EXISTS vector;")
     mock_cursor.execute.assert_any_call("DROP TABLE IF EXISTS in_stock_products")
     mock_cursor.execute.assert_any_call("DROP TABLE IF EXISTS out_of_stock_products")
+
 
 def test_search_products(vector_db):
     """Test product search functionality"""
     # Mock cursor and its fetchall result
     mock_cursor = Mock()
     vector_db.conn.cursor.return_value = mock_cursor
-    
+
     # Mock search results
     mock_results = [
         (
@@ -99,29 +107,28 @@ def test_search_products(vector_db):
             MOCK_PRODUCT_DATA["store"],
             MOCK_PRODUCT_DATA["categories"],
             json.dumps(MOCK_PRODUCT_DATA["details"]),
-            0.8  # Mock similarity score
+            0.8,  # Mock similarity score
         )
     ]
     mock_cursor.fetchall.return_value = mock_results
-    
+
     # Test search with 1536-dimensional vector
     query_embedding = [0.1] * 1536
     results = vector_db.search_products(
-        query_embedding,
-        IN_STOCK_PRODUCTS_TABLE_NAME,
-        top_k=10
+        query_embedding, IN_STOCK_PRODUCTS_TABLE_NAME, top_k=10
     )
-    
+
     # Verify results
     assert len(results) > 0
     assert results[0]["title"] == MOCK_PRODUCT_DATA["title"]
     assert results[0]["similarity"] >= SEARCH_SIMILARITY_THRESHOLD
 
+
 def test_batch_insert_product(vector_db):
     """Test batch product insertion"""
     mock_cursor = Mock()
     vector_db.conn.cursor.return_value = mock_cursor
-    
+
     # Create test data with 1536-dimensional vector
     test_products = [
         (
@@ -135,44 +142,41 @@ def test_batch_insert_product(vector_db):
             MOCK_PRODUCT_DATA["store"],
             MOCK_PRODUCT_DATA["categories"],
             json.dumps(MOCK_PRODUCT_DATA["details"]),
-            MOCK_PRODUCT_DATA["embedding"]
+            MOCK_PRODUCT_DATA["embedding"],
         )
     ]
-    
+
     # Test insertion
     vector_db.batch_insert_product(
-        test_products,
-        IN_STOCK_PRODUCTS_TABLE_NAME,
-        batch_size=1
+        test_products, IN_STOCK_PRODUCTS_TABLE_NAME, batch_size=1
     )
-    
+
     # Verify that executemany was called
     mock_cursor.executemany.assert_called_once()
     vector_db.conn.commit.assert_called_once()
 
+
 def test_insert_products_information(vector_db):
     """Test product information insertion"""
     # Create test DataFrame with 1536-dimensional vector
-    df = pd.DataFrame([{
-        **MOCK_PRODUCT_DATA,
-        "inventory_status": "in_stock"
-    }])
-    
+    df = pd.DataFrame([{**MOCK_PRODUCT_DATA, "inventory_status": "in_stock"}])
+
     # Mock batch_insert_product
-    with patch.object(vector_db, 'batch_insert_product') as mock_batch_insert:
+    with patch.object(vector_db, "batch_insert_product") as mock_batch_insert:
         vector_db.insert_products_information(df, IN_STOCK_PRODUCTS_TABLE_NAME)
         mock_batch_insert.assert_called_once()
+
 
 def test_error_handling(vector_db):
     """Test error handling in database operations"""
     # Test connection error
     vector_db.conn = None  # Reset connection
-    with patch('psycopg.connect', side_effect=Exception("Connection error")):
+    with patch("psycopg.connect", side_effect=Exception("Connection error")):
         with pytest.raises(Exception):
             vector_db.connect()
-    
+
     # Test search error
     vector_db.conn = Mock()  # Reset connection
     vector_db.conn.cursor.side_effect = Exception("Search error")
     with pytest.raises(Exception):
-        vector_db.search_products([0.1] * 1536, IN_STOCK_PRODUCTS_TABLE_NAME) 
+        vector_db.search_products([0.1] * 1536, IN_STOCK_PRODUCTS_TABLE_NAME)

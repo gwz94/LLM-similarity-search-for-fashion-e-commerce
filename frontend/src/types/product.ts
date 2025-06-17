@@ -1,16 +1,18 @@
 export interface Product {
-  id: number;
+  id: string;
   title: string;
-  average_rating: number | null;
-  rating_number: number | null;
-  features: string[];
-  description: string;
-  price: number | null;
-  images: Record<string, string>;
-  store: string;
-  categories: string[];
-  details: Record<string, any>;
-  similarity: number;
-  inventory_status: "in_stock" | "out_of_stock";
+  price: number;
+  currency: string;
+  images: Record<string, string | ImageVariant>;
+  average_rating?: number;
+  rating_number?: number;
   reason?: string;
-} 
+  details?: Record<string, string | number | boolean>;
+}
+
+interface ImageVariant {
+  large?: string;
+  thumb?: string;
+  hi_res?: string;
+  variant?: string;
+}

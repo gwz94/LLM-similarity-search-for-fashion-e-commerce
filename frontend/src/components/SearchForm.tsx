@@ -1,91 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { debounce } from "lodash";
+import React, { useState } from "react";
+import { validateSearchInput } from "../utils/validation";
 
 interface SearchFormProps {
   prompt: string;
-  setPrompt: (value: string) => void;
+  setPrompt: (prompt: string) => void;
   handleSubmit: (e: React.FormEvent) => Promise<void>;
-  isLoading?: boolean;
+  isLoading: boolean;
 }
 
-const SearchForm: React.FC<SearchFormProps> = ({ prompt, setPrompt, handleSubmit, isLoading = false }) => {
+export default function SearchForm({
+  prompt,
+  setPrompt,
+  handleSubmit,
+  isLoading,
+}: SearchFormProps) {
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validate input
-  const validateInput = (input: string): string | null => {
-    if (!input.trim()) {
-      return "Search query cannot be empty";
-    }
-    if (input.length < 2) {
-      return "Search query must be at least 2 characters long";
-    }
-    if (input.length > 100) {
-      return "Search query must be less than 100 characters";
-    }
-    // Check for potentially harmful content
-    const harmfulPatterns = [
-      /<script>/i,
-      /javascript:/i,
-      /on\w+=/i,
-      /eval\(/i,
-      /document\./i,
-      /window\./i,
-      /\b(gun|bomb|kill|murder|shoot|attack|weapon|explosive|bullet|acid|sniper|grenade|terror|assault|execute|behead|poison|cyanide|sarin|anthrax|suicide\s*bomber|arson|sabotage|molotov|lynch|genocide|riot|vandalism|rape|slaughter|firearm|extremist|burn\s*down|hate\s*crime|abuse|threaten)\b/i
-    ];
-    if (harmfulPatterns.some((pattern) => pattern.test(input))) {
-      return "Search query contains potentially harmful content";
-    }
-    return null;
-  };
-
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce((searchQuery: string) => {
-      if (isSubmitting) {
-        const validationError = validateInput(searchQuery);
-        if (validationError) {
-          setError(validationError);
-          return;
-        }
-        setError(null);
-      }
-    }, 500),
-    [isSubmitting]
-  );
-
-  // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newQuery = e.target.value;
-    setPrompt(newQuery);
-    if (isSubmitting) {
-      const validationError = validateInput(newQuery);
-      setError(validationError);
-    }
-    debouncedSearch(newQuery);
+    const value = e.target.value;
+    setPrompt(value);
+    // Remove validation from input change
+    setError(null); // Clear any previous errors
   };
 
-  // Handle form submission
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    const validationError = validateInput(prompt);
+    const validationError = validateSearchInput(prompt);
     if (validationError) {
       setError(validationError);
       return;
     }
-    setError(null);
     await handleSubmit(e);
   };
-
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      debouncedSearch.cancel();
-    };
-  }, [debouncedSearch]);
 
   return (
     <form onSubmit={onSubmit} className="w-full max-w-4xl mx-auto">
@@ -116,6 +64,4 @@ const SearchForm: React.FC<SearchFormProps> = ({ prompt, setPrompt, handleSubmit
       )}
     </form>
   );
-};
-
-export default SearchForm; 
+}

@@ -2,7 +2,7 @@ FROM ankane/pgvector:latest
 
 ENV POSTGRES_USER=postgres
 ENV POSTGRES_PASSWORD=postgres
-ENV POSTGRES_DB=fashion_ecommerce
+ENV POSTGRES_DB=fashion_ecommerce_test
 
 EXPOSE 5432
 
