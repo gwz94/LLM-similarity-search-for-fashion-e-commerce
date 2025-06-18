@@ -66,7 +66,7 @@ def main():
                 data.append(item)
 
         # Use DATA_LOAD_FRACTION to control how much data to load
-        data = data[:1000]
+        data = data[:len(data) // settings.DATA_LOAD_FRACTION]
         loggers["data_loader"].info(f"Loading 1/{settings.DATA_LOAD_FRACTION} of the data ({len(data)} products)")
 
         # Process data in smaller batches
