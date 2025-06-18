@@ -25,6 +25,8 @@ def products_description_embedding(
     """
     logger.info("Starting embedding process", extra={"num_products": len(df)})
 
+    # Select the title and description column which contains the most information to embed
+    # Prevent long embedding that will cause the semantic search to be less accurate
     embeddings_texts = df.apply(
         lambda x: f"Title: {x['title']}, Description: {x['description']}", axis=1
     ).to_list()

@@ -6,7 +6,7 @@
 1. **Fullstack Prototype development** that translates abstract idea into workable fullstack application
 2. **Customer-centric and creative thinking** involving strategic product presentation, personalized search and recommendations to enhance customer engagement and increase sales
 3. **Strategic application of OpenAI models and techniques** in title/feature extraction, semantic similarity search, AI-powered reranking of products and personalized recommendation reason generation, ensuring structured output through precise prompting, strategic selection of product data for embedding vectorization to optimize semantic search performance
-4. **Data Science skills** in data handling (Exploratory Data Analysis, data cleansing, feature engineering), hypothesis formulation, and strategic planning (separation of in-stock and out-of-stock products based on price availability)
+4. **Data Science skills** in data handling (Exploratory Data Analysis, data cleansing, feature engineering, handling missing value), hypothesis formulation, and strategic planning (separation of in-stock and out-of-stock products based on price availability)
 5. **Accelerate process speed** through strategic database indexing, batch embedding and multiprocessing technique
 6. **Rapid development** of user-friendly and visually appealing frontend to showcase application functionality, with creative titles and engaging messaging
 7. **Modern software development practices** including Agile development, version control, API based microservices architecture, Docker containerization, unit testing, Object-Oriented Programming, environment separation (production/development), strict data type validation, comprehensive environment and settings management, thorough logging, and well-structured repository
@@ -165,6 +165,8 @@
    # For development
    ./startup.sh dev
    ```
+   
+   **Note:** Initial data insertion may take approximately 30 minutes for half the dataset. To reduce processing time, you can increase the `DATA_LOAD_FRACTION` in `backend/app/config/settings.py` to insert lesser data.
 
 3. **Access the application**
    - **Local Development:**
@@ -175,7 +177,13 @@
      - Frontend: http://[VM_IP]:3001
      - Backend API: http://[VM_IP]:8001
    
-   **Note:** The startup script automatically detects VM environment and displays the correct URLs.
+   **Note:** The startup script automatically detects VM environment and displays the correct URLs after the startup.sh finish
+
+## Advanced Feature Engineering
+
+To extract additional product metadata and enhance search capabilities:
+
+- Uncomment lines 49-61 in `backend/app/preprocessing/preprocess_pipeline.py` to extract more features from in-stock products for enhanced metadata
 
 ## Architecture
 
