@@ -5,7 +5,16 @@ FRONTEND_PORT=3001
 BACKEND_PORT=8001
 DB_PORT=5432
 
+# Accept profile (default: prod)
+PROFILE=${1:-prod}
+BACKEND_ENV_FILE="backend/.env.${PROFILE}"
+FRONTEND_ENV_FILE="frontend/.env.${PROFILE}"
+COMPOSE_PROFILE="${PROFILE}"
+
+echo "Environment: $PROFILE"
+
 # Detect VM IP if available
+# To handle deployment on VM
 VM_IP=$(hostname -I | awk '{print $1}')
 IS_VM=false
 
@@ -27,18 +36,18 @@ else
     CORS_ORIGINS="http://localhost:${FRONTEND_PORT},http://localhost:3000"
 fi
 
-# Export for local shell usage
+# Export for Docker Compose
 export NEXT_PUBLIC_API_URL=${API_URL}
 export FRONTEND_PORT=${FRONTEND_PORT}
 export BACKEND_PORT=${BACKEND_PORT}
 export DB_PORT=${DB_PORT}
 
-# Write to frontend/.env.production for Next.js
-cat > frontend/.env.production << EOL
+# Write to frontend/.env.[profile] for Next.js
+cat > "${FRONTEND_ENV_FILE}" << EOL
 NEXT_PUBLIC_API_URL=${API_URL}
 EOL
 
-# Write to .env for Docker Compose
+# Write to .env for Docker Compose (Compose only reads .env in root)
 cat > .env << EOL
 NEXT_PUBLIC_API_URL=${API_URL}
 FRONTEND_PORT=${FRONTEND_PORT}
@@ -47,30 +56,33 @@ DB_PORT=${DB_PORT}
 CORS_ORIGINS=${CORS_ORIGINS}
 EOL
 
-# Write to backend/.env.production for FastAPI
-echo "CORS_ORIGINS=${CORS_ORIGINS}" >> backend/.env.production
+# Safely update or append CORS_ORIGINS to backend/.env.[profile]
+if grep -q "^CORS_ORIGINS=" "$BACKEND_ENV_FILE"; then
+    sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|" "$BACKEND_ENV_FILE"
+else
+    echo "CORS_ORIGINS=${CORS_ORIGINS}" >> "$BACKEND_ENV_FILE"
+fi
 
 echo "Starting database..."
-docker compose --profile prod up -d db-prod
+docker compose --profile "$COMPOSE_PROFILE" up -d db-${PROFILE}
 
 echo "Waiting for database to be ready..."
 sleep 10
 
 echo "Starting backend..."
-docker compose --profile prod up -d backend-prod
+docker compose --profile "$COMPOSE_PROFILE" up -d backend-${PROFILE}
 
 echo "Waiting for backend to be ready..."
 sleep 10
 
 echo "Inserting data into database..."
-docker compose --profile prod exec backend-prod python -m app.database.insert_data
+docker compose --profile "$COMPOSE_PROFILE" exec backend-${PROFILE} python -m app.database.insert_data
 
 echo "Rebuilding frontend with correct API URL..."
-# Force remove the frontend container and its image to ensure clean rebuild
-docker compose --profile prod rm -f frontend-prod
-docker compose --profile prod build --no-cache frontend-prod
-docker compose --profile prod up -d frontend-prod
+docker compose --profile "$COMPOSE_PROFILE" rm -f frontend-${PROFILE}
+docker compose --profile "$COMPOSE_PROFILE" build --no-cache frontend-${PROFILE}
+docker compose --profile "$COMPOSE_PROFILE" up -d frontend-${PROFILE}
 
-echo "Setup complete! Your application is now running at:"
+echo "Setup complete!"
 echo "Frontend: ${FRONTEND_URL}"
 echo "Backend: ${BACKEND_URL}"

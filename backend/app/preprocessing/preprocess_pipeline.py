@@ -38,7 +38,7 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df = products_description_embedding(df)
 
     # Extract title from image if title is missing
-    # NOTE: Prechecked that every products has large image url in the images column
+    # NOTE: Alaredy prechecked that every products has large image url in the images column
     mask = df["title"].isna()
     df.loc[mask, "title"] = df.loc[mask, "images"].apply(
         lambda x: product_image_title_extraction(x[0]["large"])

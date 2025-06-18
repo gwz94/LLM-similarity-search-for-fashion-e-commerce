@@ -45,8 +45,6 @@ def product_image_title_extraction(img_url: str) -> str:
 
         logger.info("Starting image title extraction", extra={"image_url": img_url})
 
-        # NOTE: This could be used to extract categories(color, occasion, etc.) to increase the context of the product.
-        # Which will increase the accuracy of the product search. Will consider if there is credit left.
         response = client.responses.create(
             model=settings.IMAGE_FEATURE_EXTRACTION_MODEL,
             input=[
