@@ -27,7 +27,7 @@ if $IS_VM; then
     FRONTEND_URL="http://${VM_IP}:${FRONTEND_PORT}"
     BACKEND_URL="http://${VM_IP}:${BACKEND_PORT}"
     API_URL="http://${VM_IP}:${BACKEND_PORT}"
-    CORS_ORIGINS="http://localhost:${FRONTEND_PORT},http://localhost:3000,http://${VM_IP}:${FRONTEND_PORT}"
+    CORS_ORIGINS="http://localhost:${FRONTEND_PORT},http://localhost:3000,http://${VM_IP}:${FRONTEND_PORT},http://${VM_IP}:3000,http://${VM_IP}:${BACKEND_PORT}"
 else
     echo "Detected local environment"
     FRONTEND_URL="http://localhost:${FRONTEND_PORT}"
@@ -56,12 +56,18 @@ DB_PORT=${DB_PORT}
 CORS_ORIGINS=${CORS_ORIGINS}
 EOL
 
-# Safely update or append CORS_ORIGINS to backend/.env.[profile]
+# Safely update or insert CORS_ORIGINS in backend/.env.[profile]
+echo "Writing CORS_ORIGINS=${CORS_ORIGINS} to ${BACKEND_ENV_FILE}"
 if grep -q "^CORS_ORIGINS=" "$BACKEND_ENV_FILE"; then
     sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|" "$BACKEND_ENV_FILE"
 else
     echo "CORS_ORIGINS=${CORS_ORIGINS}" >> "$BACKEND_ENV_FILE"
 fi
+
+# Verify it was written correctly
+echo "Verifying CORS_ORIGINS in ${BACKEND_ENV_FILE}:"
+grep "CORS_ORIGINS" "$BACKEND_ENV_FILE"
+
 
 echo "Starting database..."
 docker compose --profile "$COMPOSE_PROFILE" up -d db-${PROFILE}

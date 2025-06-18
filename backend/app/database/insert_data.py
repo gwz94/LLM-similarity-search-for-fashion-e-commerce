@@ -69,7 +69,7 @@ def main():
         data = data[:len(data) // settings.DATA_LOAD_FRACTION]
         loggers["data_loader"].info(f"Loading 1/{settings.DATA_LOAD_FRACTION} of the data ({len(data)} products)")
 
-        # Process data in smaller batches
+        # NOTE: Insert data in a small batch to prevent docker freeze up.
         BATCH_SIZE = len(data) // 20
         for i in range(0, len(data), BATCH_SIZE):
             batch = data[i : i + BATCH_SIZE]
