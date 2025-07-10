@@ -93,8 +93,22 @@ The application uses the following environment variables:
 
 The application processes Amazon Fashion product data. You can:
 
-1. **Use the provided sample data** (recommended for testing)
-2. **Add your own data** by placing JSONL files in the `raw_data/` directory
+1. **Download the required dataset** (recommended for full functionality):
+   ```bash
+   # Create the raw_data directory if it doesn't exist
+   mkdir -p raw_data
+   
+   # Download the Amazon Fashion dataset
+   curl -L "https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Amazon_Fashion.jsonl.gz" -o raw_data/meta_Amazon_Fashion.jsonl.gz
+   
+   # Extract the compressed file
+   gunzip raw_data/meta_Amazon_Fashion.jsonl.gz
+   ```
+
+2. **Use the provided sample data** (for testing without downloading the full dataset)
+3. **Add your own data** by placing JSONL files in the `raw_data/` directory
+
+**Note**: The full dataset is approximately 1.2GB when extracted. For faster testing, you can use the sample data or reduce the `DATA_LOAD_FRACTION` in `backend/app/config/settings.py`.
 
 ## 📚 API Documentation
 
@@ -223,9 +237,3 @@ docker-compose logs database
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
-
-- OpenAI for providing the GPT models and embeddings
-- FastAPI for the excellent web framework
-- Next.js for the React framework
-- PostgreSQL and pgvector for vector search capabilities
