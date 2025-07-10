@@ -13,8 +13,8 @@ class QueryValidationBase(BaseModel):
     def validate_query(cls, v):
         if not v.strip():
             raise ValueError("Query cannot be empty or only spaces.")
-        if len(v) > 500:
-            raise ValueError("Query cannot be longer than 500 characters.")
+        if len(v) > 100:
+            raise ValueError("Query cannot be longer than 100 characters.")
         
         # Check if query contains only numbers
         if v.strip().isdigit():

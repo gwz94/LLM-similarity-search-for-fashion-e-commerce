@@ -213,7 +213,7 @@ def rerank_search_results(
             logger.error("Failed to parse LLM response", extra={
                 "error": str(e),
                 "error_type": "JSONDecodeError",
-                "raw_response": response.output_text[:200]  # Log first 200 chars
+                "raw_response": response.output_text[:200] 
             })
             return products_search_results
 

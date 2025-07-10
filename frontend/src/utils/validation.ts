@@ -3,8 +3,9 @@ export const validateSearchInput = (input: string): string | null => {
     return "Search query cannot be empty";
   }
 
-  if (input.length > 500) {
-    return "Search query cannot be longer than 500 characters";
+  // To prevent the backend from freezing up, we limit the search query to 100 characters.
+  if (input.length > 100) {
+    return "Search query cannot be longer than 100 characters";
   }
 
   // First remove all spaces
